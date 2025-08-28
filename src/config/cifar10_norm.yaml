@@ -1,0 +1,16 @@
+model:
+  backbone: vit_tiny_patch16_224
+  
+method:
+  name: norm
+  head_trainable: true
+
+train:
+  batch_size: 32
+  num_workers: 0
+  epochs: 1
+  lr: 1e-3
+  weight_decay: 0.0
+  optimizer: adamw
+  max_train_batches: 0
+  max_eval_batches: 0

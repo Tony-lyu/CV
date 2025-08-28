@@ -1,0 +1,19 @@
+model:
+  backbone: vit_tiny_patch16_224
+
+method:
+  name: hybrid
+  lora_r: 8
+  lora_alpha: 16
+  lora_dropout: 0.05
+  head_trainable: true
+
+train:
+  batch_size: 32
+  num_workers: 0
+  epochs: 1
+  lr: 3e-4
+  weight_decay: 0.05
+  optimizer: adamw
+  max_train_batches: 0
+  max_eval_batches: 0
