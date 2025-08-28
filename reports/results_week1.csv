@@ -1,0 +1,13 @@
+ts,method,dataset,backbone,tuned_params_%,acc@1,ece,train_time_s,epochs
+
+1756243853,lora,cifar10,vit_tiny_patch16_224,5.0993,0.7900,0.2079,244.8,1
+1756244739,norm,cifar10,vit_tiny_patch16_224,0.2086,0.8269,0.1795,156.2,1
+1756244974,hybrid,cifar10,vit_tiny_patch16_224,0.1981,0.5719,0.2252,218.6,1
+
+1756246808,lora,cifar10,vit_tiny_patch16_224,5.0993,0.9200,0.0872,1250.6,5
+1756247906,norm,cifar10,vit_tiny_patch16_224,0.2086,0.9163,0.0942,836.1,5
+1756249405,hybrid,cifar10,vit_tiny_patch16_224,0.1981,0.8344,0.1952,1176.1,5
+
+1756257908,lora,cifar10,vit_tiny_patch16_224,5.0993,0.9593,0.0485,7249.9,1
+1756259999,norm,cifar10,vit_tiny_patch16_224,0.2090,0.9455,0.0588,4852.3,1
+1756267649,hybrid,cifar10,vit_tiny_patch16_224,0.1981,0.9460,0.0677,5431.2,1
