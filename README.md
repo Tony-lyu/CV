@@ -2,7 +2,7 @@
 
 This repo bootstraps **Week 1** of your CV project exploring whether hybridizing PEFT methods (LoRA + normalization‑only tuning) yields additive gains under constrained compute.
 
-## TL;DR — What you’ll do this week (5–8 hrs)
+## TL;DR — Weekly Plan
 1) **Set up environment** (Conda or venv) and run a quick smoke‑test training on CIFAR‑10 using a ViT backbone with:
    - **LoRA** (linear layers adapted)
    - **NormTune** (train only LayerNorm γ/β)
