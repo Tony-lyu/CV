@@ -8,22 +8,17 @@
 2) **Record metrics**: Top‑1 accuracy, **params‑tuned %**, wall‑clock/epoch, and **ECE** (calibration).  
 3) **Log results** to `reports/results_week1.csv` and jot brief notes in `reports/week1_kickoff.md`.
 
-> Hardware: Should run on CPU/MPS/ CUDA. CIFAR‑10 keeps runs short on a Mac. Expect ~3–10 min/epoch on CPU; much faster with MPS/CUDA.
+> Hardware: run on Mac Intel i7 CPU.
 
-## Install
-```bash
-# Option A: Conda (recommended)
-conda env create -f env.yml
-conda activate cv-peft
-
-# Option B: venv + pip
+## environment
+```
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Quickstart (single run)
+## Run
 ```bash
-# LoRA on CIFAR‑10
+# LoRA 
 python -m src.train --config src/config/cifar10_lora.yaml
 
 # NormTune
@@ -31,11 +26,6 @@ python -m src.train --config src/config/cifar10_norm.yaml
 
 # Hybrid
 python -m src.train --config src/config/cifar10_hybrid.yaml
-```
-
-## Reproduce Week 1 table
-```bash
-bash scripts/run_experiment.sh
 ```
 
 This will append rows to `reports/results_week1.csv` like:
@@ -47,7 +37,7 @@ This will append rows to `reports/results_week1.csv` like:
 - CIFAR‑10 will **auto‑download** to `~/.torch`. No extra steps.
 
 ## Design Overview
-- **Backbone**: `timm` ViT (`vit_base_patch16_224`, ImageNet‑1k pretrained).
+- **Backbone**: `timm` ViT (`vit_tiny_patch16_224`, ImageNet‑1k pretrained).
 - **LoRA**: Replace `nn.Linear` in attention/MLP blocks with `LoRALinear` and freeze base weights.
 - **NormTune**: Freeze all weights **except** `LayerNorm.weight`/`.bias`.
 - **Hybrid**: LoRA + NormTune; classifier head stays trainable by default (configurable).
@@ -65,15 +55,9 @@ This will append rows to `reports/results_week1.csv` like:
 - `src/datasets.py` — CIFAR‑10 loaders & transforms.
 - `src/utils.py` — Metrics (accuracy/ECE), counters, helpers.
 - `src/config/*.yaml` — Ready configs for LoRA / Norm / Hybrid.
-- `reports/week1_kickoff.md` — Your notes & takeaway.
+- `reports/week1_kickoff.md` — notes & takeaway.
 - `reports/results_week1.csv` — Append‑only results log.
 - `scripts/run_experiment.sh` — Reproduce Week 1 table.
 
-## Next (Week 2 preview)
-- Expand to **ImageNet‑100** or a VTAB subset.
-- Add ablations (LoRA rank/dropout/targets), stability across seeds.
-- Pull or re‑implement the exact **EFFT** variant from the paper repo and slot it into the same API alongside NormTune.
-
----
 
 *Created: 2025-08-25*
