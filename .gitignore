@@ -2,6 +2,9 @@
 __pycache__/
 *.py[cod]
 *.pyo
+*.__pycache__
+*.pyc
+*.pyd
 
 # Ignore datasets
 data/
