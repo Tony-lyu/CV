@@ -1,4 +1,4 @@
-# Week 1 Kickoff Notes
+# Week 1 Notes
 
 ## Related Research Questions 
 1. **Additivity**: Does LoRA+NormTune outperform each alone at matched or lower **params‑tuned %**?
