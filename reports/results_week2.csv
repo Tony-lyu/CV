@@ -6,7 +6,8 @@ ts,method,dataset,backbone,tuned_params_%,acc@1,ece,train_time_s,epochs,left_lr,
 1757009867,hybrid,cifar100,vit_tiny_patch16_224,0.4950,0.7761,0.0622,14217.3,3,0.0005,0.001
 1757024186,hybrid,cifar100,vit_tiny_patch16_224,0.4950,0.7982,0.0595,14314.2,3,0.001,0.001
 1757041895,hybrid,cifar100,vit_tiny_patch16_224,0.4950,0.7766,0.0616,17703.8,3,0.0005,0.002
-1757056236,hybrid,cifar100,vit_tiny_patch16_224,0.4950,0.8013,0.0550,14336.0,3.0.001,0.002
+1757056236,hybrid,cifar100,vit_tiny_patch16_224,0.4950,0.8013,0.0550,14336.0,3,0.001,0.002
+
 
 
 
