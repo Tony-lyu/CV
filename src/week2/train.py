@@ -13,6 +13,17 @@ from src.week1.datasets import build_cifar10
 from src.week1.vit_model import build_vit
 from src.week1.utils import load_config, get_device, count_trainable_params, accuracy, expected_calibration_error
 
+import platform, torch
+if platform.system() == "Windows":
+    try:
+        import torch_directml
+        dml = torch_directml.device()
+        device = dml
+    except Exception:
+        device = torch.device("cpu")
+else:
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
 def build_cifar100(batch_size: int, num_workers: int, img_size: int = 224):
     tfm_train = transforms.Compose([
         transforms.Resize((img_size, img_size)),

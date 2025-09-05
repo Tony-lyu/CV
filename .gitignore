@@ -1,0 +1,15 @@
+# Ignore Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Ignore datasets
+data/
+*.pt
+*.pth
+*.ckpt
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/

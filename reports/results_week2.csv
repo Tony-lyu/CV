@@ -11,3 +11,4 @@ ts,method,dataset,backbone,tuned_params_%,acc@1,ece,train_time_s,epochs,left_lr,
 
 
 
+1757101411,hybrid,cifar100,vit_tiny_patch16_224,0.4950,0.8333,0.0552,6821.3,10
