@@ -14,16 +14,22 @@ from src.week1.vit_model import build_vit
 from src.week1.utils import load_config, get_device, count_trainable_params, accuracy, expected_calibration_error
 
 import platform, torch
-if platform.system() == "Windows":
-    try:
-        import torch_directml
-        dml = torch_directml.device()
-        device = dml
-    except Exception:
-        device = torch.device("cpu")
-else:
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
+
+def get_runtime_device(force_cpu=False):
+    if force_cpu:
+        return torch.device("cpu")
+    if platform.system() == "Windows":
+        try:
+            import torch_directml
+            return torch_directml.device()
+        except ImportError:
+            return torch.device("cpu")
+    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+device = get_runtime_device(force_cpu=True)
+print(f"Using device: {device}")
+
+
 def build_cifar100(batch_size: int, num_workers: int, img_size: int = 224):
     tfm_train = transforms.Compose([
         transforms.Resize((img_size, img_size)),
