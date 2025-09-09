@@ -1,2 +1,2 @@
-ts,method,dataset,backbone,tuned_params_%,acc@1,ece,train_time_s,epochs
-1757377300,hybrid,cifar100,vit_small_patch16_224,0.2588,0.8941,0.0489,18483.1,10
+ts,method,dataset,backbone,tuned_params_%,acc@1,ece,train_time_s,epochs,left_lr,right_lr
+1757377300,hybrid,cifar100,vit_small_patch16_224,0.2588,0.8941,0.0489,18483.1,10,0.001,0.0005
