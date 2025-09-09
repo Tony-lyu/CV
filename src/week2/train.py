@@ -15,18 +15,25 @@ from src.week1.utils import load_config, get_device, count_trainable_params, acc
 
 import platform, torch
 
-def get_runtime_device(force_cpu=False):
+def get_runtime_device(force_cpu: bool = False):
     if force_cpu:
         return torch.device("cpu")
+
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+
+    if getattr(torch.backends, "mps", None) and torch.backends.mps.is_built() and torch.backends.mps.is_available():
+        return torch.device("mps")
+
     if platform.system() == "Windows":
         try:
             import torch_directml
             return torch_directml.device()
-        except ImportError:
-            return torch.device("cpu")
-    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        except Exception:
+            pass
+    return torch.device("cpu")
 
-device = get_runtime_device(force_cpu=True)
+device = get_runtime_device(force_cpu=False)
 print(f"Using device: {device}")
 
 
@@ -154,7 +161,7 @@ def main():
 
     _set_num_classes(model, num_classes)
 
-    
+    model = model.to(device)
     head = getattr(model, "head", None) or getattr(model, "fc", None) or getattr(model, "classifier", None)
     if head is not None:
         for p in head.parameters():
