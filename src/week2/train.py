@@ -94,6 +94,17 @@ def evaluate(model, loader, device, max_batches=0):
     n = max(1, seen)
     return total_loss / n, total_acc / n, total_ece / n
 
+    def enable_classifier_head(model: nn.Module):
+    """
+    Re-enable training for the classifier head like Week-3 did.
+    """
+    for attr in ("head", "fc", "classifier"):
+        if hasattr(model, attr):
+            mod = getattr(model, attr)
+            if isinstance(mod, nn.Module):
+                for p in mod.parameters():
+                    p.requires_grad = True
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--dataset', type=str, choices=['cifar10','cifar100'], required=True)
@@ -115,7 +126,7 @@ def main():
     args = ap.parse_args()
 
     device = get_device()
-    print(f"Using device: {device}")
+    print(f"\nUsing device: {device}")
 
     # Data
     if args.dataset == 'cifar10':
@@ -135,6 +146,9 @@ def main():
         head_trainable=True,
         backbone=args.backbone,
     ).to(device)
+    
+    if args.unfreeze:
+    unfreeze_classifier_head(model)
 
     import torch.nn as nn
 
