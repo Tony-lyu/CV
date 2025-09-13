@@ -294,7 +294,7 @@ def main():
     ap.add_argument("--lora_alpha", type=float, default=16.0)
     ap.add_argument("--lora_dropout", type=float, default=0.0)
 
-    ap.add_argument("--lr", type=float, default=1e-3)         # base LR (head/other)
+    ap.add_argument("--lr", type=float, default=1e-3)         # head LR 
     ap.add_argument("--lr_lora", type=float, default=5e-4)    # lora LR
     ap.add_argument("--lr_norm", type=float, default=1e-3)    # norm LR
     ap.add_argument("--weight_decay", type=float, default=0.05)
@@ -341,15 +341,13 @@ def main():
             weight_decay=args.weight_decay
         )
     optimizer = optim.AdamW(param_groups)
-
-    # Scheduler: Week-3 parity uses cosine, layerwise keeps constant unless you change epochs etc.
     scheduler = None
-    if args.method == "hybrid_parallel":
-        from torch.optim.lr_scheduler import CosineAnnealingLR
-        scheduler = CosineAnnealingLR(optimizer, T_max=args.epochs)
+    from torch.optim.lr_scheduler import CosineAnnealingLR
+    scheduler = CosineAnnealingLR(optimizer, T_max=args.epochs)
+
 
     # Loss
-    loss_fn = nn.CrossEntropyLoss()  # plain CE (Week-3 parity)
+    loss_fn = nn.CrossEntropyLoss() 
 
     # Logging prep
     log_path = Path(args.log_csv); log_path.parent.mkdir(parents=True, exist_ok=True)

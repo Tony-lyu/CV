@@ -51,7 +51,6 @@ class LoRALinear(nn.Module):
             out = out + self.bias_param
         if self.r > 0:
             x_d = self.dropout(x)
-            # NOTE: B is NOT transposed (fixed)
             lora_update = x_d.matmul(self.lora_A).matmul(self.lora_B)
             out = out + self.scaling * lora_update
         return out
@@ -204,7 +203,6 @@ def build_method_vit(
                 attach_lora_vit_block(blk, r=lora_r, lora_alpha=lora_alpha, lora_dropout=lora_dropout, attn_only=attn_only)
             elif tag == "norm":
                 attach_norm_vit_block(blk)
-        # others remain frozen
 
     else:
         raise ValueError(f"Unknown method: {method}")
