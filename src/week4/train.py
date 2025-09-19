@@ -125,6 +125,55 @@ class GradMonitor:
             "cosine_ln_p90": _p90(cos),
         }
 
+class FreezeController:
+    """
+    Batch-wise selective freezing of LoRA/Norm groups.
+    - Warm-up: freeze_lora_steps / freeze_norm_steps
+    - Alternation: alt_every batches, toggling which group is frozen
+    """
+    def __init__(self, model: nn.Module, freeze_lora_steps: int, freeze_norm_steps: int,
+                 alt_every: int, alt_order: str):
+        self.groups = collect_param_objects(model)
+        # remember original trainable-ness for restoration
+        for ps in (self.groups["lora"] + self.groups["norm"] + self.groups["other"]):
+            if not hasattr(ps, "_orig_trainable"):
+                ps._orig_trainable = bool(ps.requires_grad)
+        self.step = 0
+        self.freeze_lora_steps = int(max(0, freeze_lora_steps))
+        self.freeze_norm_steps = int(max(0, freeze_norm_steps))
+        self.alt_every = int(max(0, alt_every))
+        self.alt_order = alt_order
+
+    def _alt_freeze_flags(self):
+        if self.alt_every <= 0:
+            return False, False
+        phase = (self.step // self.alt_every) % 2
+        if self.alt_order == "lora-first":
+            # phase 0: freeze lora, phase 1: freeze norm
+            return phase == 0, phase == 1
+        else:
+            # norm-first
+            return phase == 1, phase == 0
+
+    def apply(self):
+        # warm-ups
+        freeze_lora = (self.step < self.freeze_lora_steps)
+        freeze_norm = (self.step < self.freeze_norm_steps)
+
+        # alternation (after warm-ups; union logic keeps a group frozen if any rule says so)
+        alt_lora, alt_norm = self._alt_freeze_flags()
+        if self.step >= max(self.freeze_lora_steps, self.freeze_norm_steps):
+            freeze_lora = freeze_lora or alt_lora
+            freeze_norm = freeze_norm or alt_norm
+
+        # set requires_grad using original flags as baseline
+        for p in self.groups["lora"]:
+            p.requires_grad = p._orig_trainable and (not freeze_lora)
+        for p in self.groups["norm"]:
+            p.requires_grad = p._orig_trainable and (not freeze_norm)
+        # leave "other" (including head) as originally configured
+        self.step += 1
+
 # ---------------------------
 # Data (augs per method)
 # ---------------------------
@@ -205,6 +254,20 @@ def split_param_groups_generic(model: nn.Module, base_lr: float, lora_lr: float,
     if pg_lora:  groups.append({"params": pg_lora,  "lr": lora_lr, "weight_decay": 0.0})
     return groups
 
+def _classify_param(name: str) -> str:
+    ln = name.lower()
+    if ("lora_" in ln) or ("lora" in ln) or ln.endswith(".a") or ln.endswith(".b"):
+        return "lora"
+    if (("norm" in ln) or ("layernorm" in ln) or ("ln" in ln)) and (("weight" in ln) or ("bias" in ln)):
+        return "norm"
+    return "other"
+
+def collect_param_objects(model: nn.Module):
+    groups = {"lora": [], "norm": [], "other": []}
+    for n, p in model.named_parameters():
+        groups[_classify_param(n)].append(p)
+    return groups
+
 # ---------------------------
 # Train / Eval
 # ---------------------------
@@ -241,11 +304,13 @@ def evaluate(model, loader, device, max_batches=0):
     return total_acc / n, total_ece / n
 
 
-def train_one_epoch(model, loader, optimizer, device, monitor: GradMonitor = None, loss_fn=None, clip_grad: float = 0.0):
+def train_one_epoch(model, loader, optimizer, device, freeze_ctrl: 'FreezeController' = None, monitor: GradMonitor = None, loss_fn=None, clip_grad: float = 0.0):
     model.train()
     loss_fn = loss_fn or nn.CrossEntropyLoss()
     t0 = time.time()
     for x, y in tqdm(loader, desc="train", leave=False):
+        if freeze_ctrl:
+            freeze_ctrl.apply()
         x = x.to(device, non_blocking=True); y = y.to(device, non_blocking=True)
         optimizer.zero_grad(set_to_none=True)
         if monitor: monitor.capture_pre_step()
@@ -288,7 +353,7 @@ def main():
     ap.add_argument("--attn_only", action="store_true")
 
     ap.add_argument("--pretrained", action="store_true")
-    ap.add_argument("--unfreeze", action="store_true", help="Unfreeze classifier head (train it).")
+    ap.add_argument("--unfreeze", action="store_true", help="Unfreeze classifier head.")
 
     ap.add_argument("--lora_r", type=int, default=8)
     ap.add_argument("--lora_alpha", type=float, default=16.0)
@@ -303,6 +368,12 @@ def main():
     ap.add_argument("--log_csv", type=str, default="reports/results_week4.csv")
     ap.add_argument("--diagnostics", type=int, default=1)
     ap.add_argument("--seed", type=int, default=42)
+    # week5 addition for periodic freeze 
+    ap.add_argument("--freeze_lora_steps", type=int, default=0, help="Freeze LoRA for first N batches.")
+    ap.add_argument("--freeze_norm_steps", type=int, default=0, help="Freeze Norm for first N batches.")
+    ap.add_argument("--alt_freeze_every", type=int, default=0, help="After warmups, alternate freezing every K batches.")
+    ap.add_argument("--alt_freeze_order", type=str, default="lora-first", choices=["lora-first","norm-first"])
+
     args = ap.parse_args()
 
     torch.manual_seed(args.seed); torch.cuda.manual_seed_all(args.seed)
@@ -329,6 +400,15 @@ def main():
         unfreeze_classifier_head(model)
     model.to(device)
 
+    freeze_ctrl = None
+    if (args.freeze_lora_steps > 0) or (args.freeze_norm_steps > 0) or (args.alt_freeze_every > 0):
+        freeze_ctrl = FreezeController(
+            model,
+            freeze_lora_steps=args.freeze_lora_steps,
+            freeze_norm_steps=args.freeze_norm_steps,
+            alt_every=args.alt_freeze_every,
+            alt_order=args.alt_freeze_order,
+        )
     # Param groups
     if args.method == "hybrid_parallel":
         param_groups = split_param_groups_week3(
@@ -358,7 +438,7 @@ def main():
     # Train
     for epoch in range(1, args.epochs + 1):
         if monitor: monitor.zero_epoch()
-        avg_step_time = train_one_epoch(model, train_loader, optimizer, device, monitor, loss_fn, args.clip_grad)
+        avg_step_time = train_one_epoch(model, train_loader, optimizer, device, freeze_ctrl, monitor, loss_fn, args.clip_grad)
         acc1, ece = evaluate(model, test_loader, device)
         if scheduler is not None: scheduler.step()
 
@@ -387,6 +467,10 @@ def main():
             "update_norm_norm_mean": diag["update_norm_norm_mean"],
             "cosine_ln_mean": diag["cosine_ln_mean"],
             "cosine_ln_p90": diag["cosine_ln_p90"],
+            "freeze_lora_steps": args.freeze_lora_steps,
+            "freeze_norm_steps": args.freeze_norm_steps,
+            "alt_freeze_every": args.alt_freeze_every,
+            "alt_freeze_order": args.alt_freeze_order,
         }
 
         file_exists = log_path.exists()
