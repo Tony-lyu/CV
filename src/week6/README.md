@@ -1,0 +1,9 @@
+python src/week6/train.py --dataset cifar100 --model vit_small_patch16_224 --img_size 224 --batch_size 128 --workers 4 --epochs 5 --pretrained --log_csv reports/results_week6.csv --method hybrid_layerwise --policy deep_lora --unfreeze --lora_r 8 --lora_alpha 16 --lr 1e-3 --lr_norm 1e-3 --lr_lora 5e-4 --weight_decay 0.05 --freeze_lora_steps 400 --freeze_norm_steps 0 --lr_parity 0
+
+python src/week6/train.py --dataset cifar100 --model vit_small_patch16_224 --img_size 224 --batch_size 128 --workers 4 --epochs 5 --pretrained --log_csv reports/results_week6.csv --method hybrid_layerwise --policy deep_lora --unfreeze --lora_r 8 --lora_alpha 16 --attn_only --lr 1e-3 --lr_norm 1e-3 --lr_lora 5e-4 --weight_decay 0.05 --lr_parity 0
+
+python src/week6/train.py --dataset cifar100 --model vit_small_patch16_224 --img_size 224 --batch_size 128 --workers 4 --epochs 5 --pretrained --log_csv reports/results_week6.csv --method hybrid_layerwise --policy deep_lora --unfreeze --lora_r 8 --lora_alpha 16 --lr 1e-3 --lr_norm 1e-3 --lr_lora 5e-4 --weight_decay 0.05 --alt_freeze_every 400 --alt_freeze_order norm-first --lr_parity 0
+
+python src/week6/train.py --dataset cifar100 --model vit_small_patch16_224 --img_size 224 --batch_size 128 --workers 4 --epochs 5 --pretrained --log_csv reports/results_week6.csv --method hybrid_layerwise --policy even_lora --unfreeze --lora_r 8 --lora_alpha 16 --lr 1e-3 --lr_norm 1e-3 --lr_lora 5e-4 --weight_decay 0.05 --lr_parity 0
+
+python src/week6/train.py --dataset cifar100 --model vit_small_patch16_224 --img_size 224 --batch_size 128 --workers 4 --epochs 5 --pretrained --log_csv reports/results_week6.csv --method hybrid_layerwise --policy odd_lora --unfreeze --lora_r 8 --lora_alpha 16 --lr 1e-3 --lr_norm 1e-3 --lr_lora 5e-4 --weight_decay 0.05 --lr_parity 0

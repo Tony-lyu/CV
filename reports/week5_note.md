@@ -1,6 +1,6 @@
 # Week 5 — Selective Freezing for Hybrid
 
-## SummarySummary 
+## Summary
 
 Added batch-wise selective freezing to hybrid adapter training and got two concrete wins over Week-4:
 

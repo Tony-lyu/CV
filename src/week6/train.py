@@ -208,58 +208,152 @@ class FreezeController:
         self.step += 1
 
 # ---------------------------
-# Dynamic LR parity (NEW)
+# Dynamic LR parity
 # ---------------------------
 class DynamicLRParity:
     """
-    Keeps LoRA and Norm update strengths comparable by scaling their LRs
-    using EMA grad-norms from GradMonitor. Cheap & effective.
+    Balances LoRA vs Norm update strengths by scaling their LRs using EMA grad norms.
 
-    - target_ratio ~ 1.0 means equalize magnitudes
-    - adjusts every 'period' steps, scaled with clip [min_scale, max_scale]
+    Safeguards:
+      - No adjustments while either group is frozen/absent
+      - Cool-off for a few periods right after unfreeze (EMAs reset)
+      - Deadband around target ratio (avoid needless twitching)
+      - Limit consecutive scaling of the same group
+      - Clamp absolute LRs to [min_lr, max_lr] after every change
     """
-    def __init__(self, target_ratio: float = 1.0, period: int = 20,
-                 min_scale: float = 0.5, max_scale: float = 2.0, eps: float = 1e-8):
+    def __init__(
+        self,
+        target_ratio=1.0,
+        period=20,
+        min_scale=0.5,
+        max_scale=2.0,
+        eps=1e-8,
+        min_lr=1e-6,
+        max_lr=1e-2,
+        min_ema=1e-3,
+        deadband_lo=2/3,     # no change if gL/gN is within [2/3, 3/2]
+        deadband_hi=3/2,
+        cooloff_periods=2,   # skip this many periods after groups become active
+        max_consecutive=3,   # don't scale the same group more than N periods in a row
+    ):
         self.target = target_ratio
         self.period = max(1, int(period))
         self.min_scale = min_scale
         self.max_scale = max_scale
+        self.max_consecutive = max_consecutive
         self.eps = eps
-        self._steps = 0
+        self.min_lr = min_lr
+        self.max_lr = max_lr
+        self.min_ema = min_ema
+        self.deadband_lo = deadband_lo
 
-    def maybe_adjust(self, optimizer: optim.Optimizer, monitor: GradMonitor):
+        self.deadband_hi = deadband_hi
+        self.cooloff_periods = max(0, int(cooloff_periods))
+
+        self._steps = 0
+        self._prev_active = False
+        self._cooloff_left = 0
+        self._last_scaled = None        # "lora" | "norm" | None
+        self._last_scaled_streak = 0
+
+    def _both_groups_active(self, optimizer):
+        names = set(pg.get("name") for pg in optimizer.param_groups)
+        if not {"lora", "norm"}.issubset(names):
+            return False
+        active = {"lora": False, "norm": False}
+        for pg in optimizer.param_groups:
+            name = pg.get("name")
+            if name in active:
+                if any(p.requires_grad for p in pg["params"]):
+                    active[name] = True
+        return active["lora"] and active["norm"]
+
+    def _clamp_lrs(self, optimizer):
+        for pg in optimizer.param_groups:
+            if "lr" in pg:
+                pg["lr"] = float(max(self.min_lr, min(self.max_lr, pg["lr"])))
+
+    def maybe_adjust(self, optimizer, monitor):
         self._steps += 1
-        if (self._steps % self.period) != 0:  # only occasionally adjust to avoid thrash
+        if (self._steps % self.period) != 0:
             return
 
+        active_now = self._both_groups_active(optimizer)
+        if not active_now:
+            # mark inactive; next activation will reset EMAs & start cooloff
+            self._prev_active = False
+            return
+
+        # transition: just became active → reset EMAs and start cooloff
+        if active_now and not self._prev_active:
+            if monitor is not None:
+                monitor.ema_grad_lora = None
+                monitor.ema_grad_norm = None
+            self._prev_active = True
+            self._cooloff_left = self.cooloff_periods
+            self._last_scaled = None
+            self._last_scaled_streak = 0
+            return
+
+        # honor cooloff window
+        if self._cooloff_left > 0:
+            self._cooloff_left -= 1
+            return
+
+        # need valid, non-trivial EMAs
         gL = monitor.ema_grad_lora if monitor is not None else None
         gN = monitor.ema_grad_norm if monitor is not None else None
-        if gL is None or gN is None:  # not warmed up yet
+        if gL is None or gN is None:
+            return
+        if gL < self.min_ema or gN < self.min_ema:
             return
 
-        # desired: gL ≈ target * gN
-        # scale LoRA lr by sL, Norm lr by sN (here we only scale the minority side toward parity)
+        # ratio with guard
+        ratio = gL / max(gN, self.eps)  # want ratio ≈ target
+        # convert to "relative to target"
+        ratio_rel = ratio / max(self.target, self.eps)
+
+        # deadband: do nothing if already close enough
+        if self.deadband_lo <= ratio_rel <= self.deadband_hi:
+            return
+
+        # determine which side to scale (shrink the dominant)
         scale_L = 1.0
         scale_N = 1.0
-        if gL > (self.target * gN + self.eps):
-            # LoRA too strong -> scale down L
-            raw = (self.target * gN) / max(gL, self.eps)
+        scaled_group = None
+
+        if ratio_rel > self.deadband_hi:
+            # LoRA too strong, shrink LoRA
+            raw = 1.0 / max(ratio_rel, self.eps)  # target is 1.0 after normalization
             scale_L = float(min(self.max_scale, max(self.min_scale, raw)))
-        elif gN > (gL / max(self.target, self.eps) + self.eps):
-            # Norm too strong -> scale down N
-            raw = (gL / max(self.target, self.eps)) / max(gN, self.eps)
+            scaled_group = "lora"
+        else:  # ratio_rel < deadband_lo → Norm too strong, shrink Norm
+            raw = ratio_rel  # bring it up by shrinking Norm
             scale_N = float(min(self.max_scale, max(self.min_scale, raw)))
+            scaled_group = "norm"
 
-        if abs(scale_L - 1.0) < 1e-4 and abs(scale_N - 1.0) < 1e-4:
-            return  # no need to touch
+        # streak limiter: avoid shrinking the same side too many times in a row
+        if scaled_group == self._last_scaled:
+            if self._last_scaled_streak >= self.max_consecutive:
+                return
+            self._last_scaled_streak += 1
+        else:
+            self._last_scaled = scaled_group
+            self._last_scaled_streak = 1
 
+        # apply
         for pg in optimizer.param_groups:
-            name = pg.get("name", None)
+            name = pg.get("name")
             if name == "lora":
                 pg["lr"] *= scale_L
             elif name == "norm":
                 pg["lr"] *= scale_N
-        # (optional) You can also clip absolute LRs to sane bounds if desired.
+
+        # keep LRs in a sane range
+        self._clamp_lrs(optimizer)
+
+
+
 
 # ---------------------------
 # Data (augs per method)
@@ -369,7 +463,7 @@ def evaluate(model, loader, device, max_batches=0):
         images = images.to(device, non_blocking=True)
         targets = targets.to(device, non_blocking=True)
 
-        with torch.cuda.amp.autocast(enabled=(device.type == 'cuda')):
+        with torch.amp.autocast('cuda', enabled=(device.type == 'cuda')):
             logits = model(images)
         b = targets.size(0)
         total_acc  += (logits.argmax(1) == targets).float().sum().item()
@@ -387,7 +481,7 @@ def train_one_epoch(model, loader, optimizer, device,
                     lr_parity: 'DynamicLRParity' = None):
     model.train()
     loss_fn = loss_fn or nn.CrossEntropyLoss()
-    scaler = torch.cuda.amp.GradScaler(enabled=(device.type == 'cuda'))
+    scaler = torch.amp.GradScaler('cuda', enabled=(device.type == 'cuda'))
 
     t0 = time.time()
     for x, y in tqdm(loader, desc="train", leave=False):
@@ -397,7 +491,7 @@ def train_one_epoch(model, loader, optimizer, device,
         optimizer.zero_grad(set_to_none=True)
         if monitor: monitor.capture_pre_step()
 
-        with torch.cuda.amp.autocast(enabled=(device.type == 'cuda')):
+        with torch.amp.autocast('cuda', enabled=(device.type == 'cuda')):
             logits = model(x)
             loss = loss_fn(logits, y)
 
@@ -526,7 +620,7 @@ def main():
 
     # Epoch-level cosine sched (kept simple and comparable to your Week 5)
     from torch.optim.lr_scheduler import CosineAnnealingLR
-    scheduler = CosineAnnealingLR(optimizer, T_max=args.epochs)
+    scheduler = CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=1e-5)
 
     # Loss
     loss_fn = nn.CrossEntropyLoss()
