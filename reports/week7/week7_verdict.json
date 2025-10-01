@@ -1,0 +1,7 @@
+{
+  "pareto_front_tags": [
+    ""
+  ],
+  "q1_answer": "Hybrid is additive iff any hybrid tag appears on the Pareto front; otherwise interference.",
+  "q2_answer": "Use layer-sweep results (tags starting with layersweep_) to identify where LoRA vs Norm/EFFT help most."
+}
