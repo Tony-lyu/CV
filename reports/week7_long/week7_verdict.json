@@ -2,10 +2,9 @@
   "pareto_front_sources": [
     "reports\\week7\\budget0p2_hybrid_layerwise_s2.csv",
     "reports\\week7\\budget0p5_hybrid_layerwise_s2.csv",
-    "reports\\week7\\budget0p5_norm_only_s0.csv",
-    "reports\\week7\\budget1p0_hybrid_layerwise_s0.csv",
     "reports\\week7\\budget1p0_lora_only_s2.csv",
-    "reports\\week7\\layersweep_hybrid_oddlora_s0.csv"
+    "reports\\week7_long\\budget0p5_hybrid_layers_s0.csv",
+    "reports\\week7_long\\budget0p5_norm_only_s0.csv"
   ],
   "note": "A hybrid is 'additive' for Q1 if any hybrid source appears on the Pareto front."
 }
